@@ -23,7 +23,9 @@
     "react-native-safe-area-context": "4.6.3",
     "react-native-screens": "~3.22.0",
     "react-use-wizard": "^2.2.3",
-    "recoil": "^0.7.7"
+    "recoil": "^0.7.7",
+    "react-native-web": "~0.19.6",
+    "@expo/webpack-config": "^19.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

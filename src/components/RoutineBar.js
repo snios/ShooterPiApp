@@ -42,7 +42,7 @@ const RoutineBar = ({ tasks, start, invertColors }) => {
           const color = routine?.operation === 'on' ? (invertColors ? 'red' : 'green') : (invertColors ? 'green' : 'red');
           const widthPercent = `${((routine?.duration || 0) / totalDuration) * 100}%`;
           return (
-            <View key={index} style={{ width: widthPercent, height: 50, backgroundColor: color, borderRadius: 15 }} />
+            <View key={index} style={{ width: widthPercent, height: 30, backgroundColor: color, borderRadius: 10 }} />
           );
         })}
         <Animated.View
@@ -53,7 +53,7 @@ const RoutineBar = ({ tasks, start, invertColors }) => {
             bottom: 0,
             width: animatedWidth,
             backgroundColor: 'white',
-            borderRadius: 15,
+            borderRadius: 10,
           }}
         />
       </View>
@@ -68,17 +68,17 @@ const styles = StyleSheet.create({
   },
   bar: {
     flexDirection: 'row',
-    height: 50,
-    width: Dimensions.get('window').width - 32,
+    height: 30,
+    width: Dimensions.get('window').width - 45,
     overflow: 'hidden',
-    borderRadius: 15,
+    borderRadius: 10,
     elevation: 3,
     backgroundColor: '#f0f0f0',
   },
 });
 
 RoutineBar.propTypes = {
-  routines: PropTypes.arrayOf(
+  tasks: PropTypes.arrayOf(
     PropTypes.shape({
       operation: PropTypes.string,
       duration: PropTypes.number,
@@ -89,7 +89,7 @@ RoutineBar.propTypes = {
 };
 
 RoutineBar.defaultProps = {
-  routines: [],
+  tasks: [],
   start: false,
   invertColors: false,
 };

@@ -12,7 +12,7 @@ export const ShooterAPIProvider = ({ children }) => {
     AsyncStorage.getItem('SERVER_URL')
       .then((url) => {
         // Use the fetched URL or fallback to the default URL
-        setServerUrl(url || 'http://YOUR_DEFAULT_SERVER_URL');
+        setServerUrl(url || 'http://192.168.4.1');
       })
       .catch((error) => {
         console.error('Error fetching server URL:', error);

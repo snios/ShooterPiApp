@@ -35,7 +35,7 @@ const RoutineListScreen = ({ navigation }) => {
   const renderItem = ({ item }) => (
     <TouchableOpacity style={styles.routineItem}
       onPress={() => navigation.navigate('ViewRoutine', { id: item.id })} // Navigate to ViewRoutineScreen
-      onLongPress={() => handleDeleteRoutine(item.id)}
+      // onLongPress={() => handleDeleteRoutine(item.id)}
     >
       <View style={styles.routineNameContainer}>
         <Text style={styles.routineName}>{item.name}</Text>

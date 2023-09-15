@@ -27,9 +27,9 @@ const EditRoutineScreen = ({ navigation, route }) => {
   useEffect(() => {
     const fetchRoutine = async () => {
       try {
-        console.log('GET ROUTINE', routineId)
+        // console.log('GET ROUTINE', routineId)
         const reponse = await routinesApi.get(routineId);
-        console.log('GET ROUTINE', reponse.data)
+        // console.log('GET ROUTINE', reponse.data)
         setRoutine(reponse.data);
       } catch (error) {
         console.error('Error fetching routine:', error);

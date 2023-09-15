@@ -11,6 +11,7 @@ import {
 import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
 import { TaskRow } from "../components/TaskRow";
+import RoutineBar from "../components/RoutineBar";
 
 const ViewRoutineScreen = ({ navigation, route }) => {
   const { id } = route.params;
@@ -175,6 +176,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   };
 
   const renderChannelItem = ({ item }) => (
+    <>
     <View style={styles.channelItemContainer}>
       <View style={styles.channelHeader}>
         <TouchableOpacity
@@ -206,7 +208,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
             size={20}
             color="black"
           />
-        </TouchableOpacity>
+        </TouchableOpacity>       
       </View>
 
       {expandedChannels.includes(item.id) ? (
@@ -232,6 +234,8 @@ const ViewRoutineScreen = ({ navigation, route }) => {
         </View>
       ) : null}
     </View>
+     <RoutineBar tasks={item.tasks} invertColors start={isRunning}/>
+     </>
   );
 
   if (isLoading || !routine) return <Text>Loading...</Text>;

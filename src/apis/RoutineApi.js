@@ -17,7 +17,7 @@ const useRoutinesApi = (serverUrl) => {
       console.log('get all routines:: url', serverUrl);
       return api.get('/routine');
     } else {
-      console.log(`get routine with id ${id}:: url`, serverUrl);
+      // console.log(`get routine with id ${id}:: url`, serverUrl);
       return api.get(`/routine/${id}`);
     }
   };

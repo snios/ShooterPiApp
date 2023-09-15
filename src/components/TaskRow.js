@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, StyleSheet } from "react-native";
+import { View, Text, TextInput, Button, StyleSheet, Switch } from "react-native";
 
 export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -7,25 +7,46 @@ export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
   const [newDuration, setNewDuration] = useState(task.duration);
 
   const handleSave = () => {
-    handleUpdateTask(id, { operation: newOperation, duration: newDuration });
+    let duration = parseFloat(newDuration);
+    if (isNaN(duration)) {
+      duration = 0;
+    }
+    handleUpdateTask(id, { operation: newOperation, duration: duration });
     setIsEditing(false);
   };
 
   const handleDelete = () => {
     handleDeleteTask(id);
   };
+
+  const handleToggle = (operation) => {
+    setNewOperation(operation === 'on' ? 'off' : 'on');
+  };
+
+  const handleNumberInputChange = (text) => {
+    // Replace all commas with periods
+    const sanitizedText = text.replace(',', '.');
+    setNewDuration(sanitizedText);
+  };
   return (
     <View style={styles.taskItem}>
       {isEditing ? (
         <>
-          <TextInput
+          {/* <TextInput
             value={newOperation}
             onChangeText={setNewOperation}
             style={styles.editableText}
-          />
+          /> */}
+            <Switch
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={newOperation === 'on' ? '#f5dd4b' : '#f4f3f4'}
+              ios_backgroundColor="#3e3e3e"
+              onValueChange={() => handleToggle(newOperation)}
+              value={newOperation === 'on'}
+            />
           <TextInput
             value={String(newDuration)}
-            onChangeText={(text) => setNewDuration(Number(text))}
+            onChangeText={(text) => handleNumberInputChange(text)}
             style={styles.editableText}
             keyboardType="numeric"
           />
@@ -34,7 +55,7 @@ export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
       ) : (
         <>
           <Text style={styles.operation}>{task.operation}</Text>
-          <Text style={styles.duration}>{task.duration} seconds</Text>
+          <Text style={styles.duration}>{task.duration}s</Text>
           <Button title="Edit" onPress={() => setIsEditing(true)} />
           <Button title="Delete" onPress={handleDelete} />
         </>
