@@ -1,21 +1,22 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import usePinsApi from '../apis/PinsApi'
-import useRoutinesApi from '../apis/RoutineApi';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import usePinsApi from "../apis/PinsApi";
+import useRoutinesApi from "../apis/RoutineApi";
+import useProgramApi from "../apis/ProgramApi";
 
 const ShooterAPIContext = createContext();
 
 export const ShooterAPIProvider = ({ children }) => {
-  const [serverUrl, setServerUrl] = useState('');
+  const [serverUrl, setServerUrl] = useState("");
 
   useEffect(() => {
-    AsyncStorage.getItem('SERVER_URL')
+    AsyncStorage.getItem("SERVER_URL")
       .then((url) => {
         // Use the fetched URL or fallback to the default URL
-        setServerUrl(url || 'http://192.168.4.1');
+        setServerUrl(url || "http://192.168.4.1");
       })
       .catch((error) => {
-        console.error('Error fetching server URL:', error);
+        console.error("Error fetching server URL:", error);
       });
   }, []);
 
@@ -23,18 +24,21 @@ export const ShooterAPIProvider = ({ children }) => {
   useEffect(() => {
     if (serverUrl) {
       // Optionally, you can save the server URL to AsyncStorage
-      AsyncStorage.setItem('SERVER_URL', serverUrl).catch((error) => {
-        console.error('Error saving server URL:', error);
+      AsyncStorage.setItem("SERVER_URL", serverUrl).catch((error) => {
+        console.error("Error saving server URL:", error);
       });
     }
   }, [serverUrl]);
 
-    // Initialize the APIs with the server URL
-    const routinesApi = useRoutinesApi(serverUrl);
-    const pinsApi = usePinsApi(serverUrl);
+  // Initialize the APIs with the server URL
+  const routinesApi = useRoutinesApi(serverUrl);
+  const pinsApi = usePinsApi(serverUrl);
+  const programApi = useProgramApi(serverUrl);
 
   return (
-    <ShooterAPIContext.Provider value={{ routinesApi, pinsApi, setServerUrl, serverUrl }}>
+    <ShooterAPIContext.Provider
+      value={{ routinesApi, pinsApi, programApi, setServerUrl, serverUrl }}
+    >
       {children}
     </ShooterAPIContext.Provider>
   );
@@ -43,7 +47,9 @@ export const ShooterAPIProvider = ({ children }) => {
 export const useShooterApiContext = () => {
   const context = useContext(ShooterAPIContext);
   if (!context) {
-    throw new Error('useShooterApiContext must be used within a ShooterAPIProvider');
+    throw new Error(
+      "useShooterApiContext must be used within a ShooterAPIProvider"
+    );
   }
   return context;
 };

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import axios from 'axios';
+import { useEffect } from "react";
+import axios from "axios";
 
 const usePinsApi = (serverUrl) => {
   const api = axios.create({
@@ -11,12 +11,12 @@ const usePinsApi = (serverUrl) => {
   }, [serverUrl]);
 
   const get = () => {
-    console.log('get all pins:: url', serverUrl);
-    return api.get('/pins');
+    console.log("get all pins:: url", serverUrl);
+    return api.get("/pins");
   };
 
   const create = (pinData) => {
-    return api.post('/pins', pinData);
+    return api.post("/pins", pinData);
   };
 
   const update = (id, pinData) => {

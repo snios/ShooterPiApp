@@ -12,12 +12,13 @@ import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vect
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
 import { TaskRow } from "../components/TaskRow";
 import RoutineBar from "../components/RoutineBar";
+import * as Crypto from "expo-crypto";
 
 const ViewRoutineScreen = ({ navigation, route }) => {
   const { id } = route.params;
   const [expandedChannels, setExpandedChannels] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const { routinesApi, pinsApi } = useShooterApiContext();
+  const { routinesApi, pinsApi, programApi } = useShooterApiContext();
   const [routine, setRoutine] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState(false);
@@ -27,8 +28,23 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     const fetchRoutine = async () => {
       setIsLoading(true);
       try {
-        const fetchedRoutine = await routinesApi.get(id); // Replace with your API call
-        setRoutine(fetchedRoutine.data);
+        const fetchedRoutine = await programApi.getById(id);
+        console.log("fetchRoutine success", fetchedRoutine.data);
+        // Process the data to include fake IDs
+        const processedData = {
+          ...fetchedRoutine.data,
+          pinConfigurations: fetchedRoutine.data.pinConfigurations.map(
+            (config) => ({
+              ...config,
+              actions: config.actions.map((action) => ({
+                ...action,
+                id: Crypto.randomUUID(), // Generate a unique ID for each action
+              })),
+            })
+          ),
+        };
+        console.log("proccesed data", JSON.stringify(processedData));
+        setRoutine(processedData);
       } catch (error) {
         console.error("Error fetching routine:", error);
       }
@@ -83,11 +99,11 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
   const handleRun = () => {
     setIsRunning(true);
-    routinesApi
+    programApi
       .run(routine.id)
       .then((response) => {
         // Handle success if needed
-        setIsRunning(false);
+        // setIsRunning(false);
       })
       .catch((error) => {
         setIsRunning(false);
@@ -96,53 +112,61 @@ const ViewRoutineScreen = ({ navigation, route }) => {
       });
   };
 
-  const handleUpdateTask = async (taskId, updatedData) => {
+  const handleUpdateAction = async (taskId, updatedData) => {
     // Find the channel and task to update
-    const updatedChannels = routine.channels.map((channel) => {
-      const updatedTasks = channel.tasks.map((task) => {
-        if (task.id !== taskId) return task;
+    const updatedpinConfigurations = routine.pinConfigurations.map(
+      (pinConfiguration) => {
+        const updatedActions = pinConfiguration.actions.map((action) => {
+          if (action.id !== taskId) return action;
+
+          console.log("found the one...", action, updatedData);
+
+          return {
+            ...action,
+            ...updatedData,
+          };
+        });
 
         return {
-          ...task,
-          ...updatedData,
+          ...pinConfiguration,
+          actions: updatedActions,
         };
-      });
-
-      return {
-        ...channel,
-        tasks: updatedTasks,
-      };
-    });
+      }
+    );
 
     // Optimistic update for a better user experience
     const updatedRoutine = {
       ...routine,
-      channels: updatedChannels,
+      pinConfigurations: updatedpinConfigurations,
     };
 
+    console.log("updated routine", updatedRoutine);
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
   };
 
-  const handleDeleteTask = (task_id) => {
+  const handleDeleteTask = (id) => {
     let found = false;
-    const updatedChannels = routine.channels.map((channel) => {
-      const updatedTasks = channel.tasks.filter((task) => {
-        if (task.id === task_id) {
-          found = true;
-          return false;
-        }
-        return true;
-      });
+    console.log("delete action", id);
+    const updatedpinConfigurations = routine.pinConfigurations.map(
+      (pinConfiguration) => {
+        const updatedActions = pinConfiguration.actions.filter((action) => {
+          if (id === action.id) {
+            found = true;
+            return false;
+          }
+          return true;
+        });
 
-      if (found) {
-        return {
-          ...channel,
-          tasks: updatedTasks,
-        };
+        if (found) {
+          return {
+            ...pinConfiguration,
+            actions: updatedActions,
+          };
+        }
+        return pinConfiguration;
       }
-      return channel;
-    });
+    );
 
     if (!found) {
       console.warn("Task not found");
@@ -152,7 +176,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     // Optimistic update
     const updatedRoutine = {
       ...routine,
-      channels: updatedChannels,
+      pinConfigurations: updatedpinConfigurations,
     };
 
     setRoutine(updatedRoutine);
@@ -161,10 +185,21 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
   const handleSaveUpdates = async () => {
     try {
-      const response = await routinesApi.update(routine.id, routine); // Replace with your actual API call
+      const response = await programApi.createOrUpdate(routine); // Replace with your actual API call
       // If the API returns the updated routine, use it to update the state
       if (response.data) {
-        setRoutine(response.data);
+        // Process the data to include fake IDs
+        const processedData = {
+          ...response.data,
+          pinConfigurations: response.data.pinConfigurations.map((config) => ({
+            ...config,
+            actions: config.actions.map((action) => ({
+              ...action,
+              id: Crypto.randomUUID(), // Generate a unique ID for each action
+            })),
+          })),
+        };
+        setRoutine(processedData);
       }
       setPendingUpdates(false);
     } catch (error) {
@@ -177,65 +212,70 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
   const renderChannelItem = ({ item }) => (
     <>
-    <View style={styles.channelItemContainer}>
-      <View style={styles.channelHeader}>
-        <TouchableOpacity
-          onPress={() => {
-            if (expandedChannels.includes(item.id)) {
-              setExpandedChannels((prev) =>
-                prev.filter((id) => id !== item.id)
-              );
-            } else {
-              setExpandedChannels((prev) => [...prev, item.id]);
-            }
-          }}
-        >
-          <Text style={styles.channelName}>{`Channel ${item.pin_id}`}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            if (expandedChannels.includes(item.id)) {
-              setExpandedChannels((prev) =>
-                prev.filter((id) => id !== item.id)
-              );
-            } else {
-              setExpandedChannels((prev) => [...prev, item.id]);
-            }
-          }}
-        >
-          <AntDesign
-            name={expandedChannels.includes(item.id) ? "up" : "down"}
-            size={20}
-            color="black"
-          />
-        </TouchableOpacity>       
-      </View>
-
-      {expandedChannels.includes(item.id) ? (
-        <View style={{marginTop: 6}}>
-          <FlatList
-            data={item.tasks}
-            renderItem={({ item: task, index }) => (
-              <TaskRow
-                task={task}
-                id={task.id}
-                handleUpdateTask={handleUpdateTask}
-                handleDeleteTask={handleDeleteTask}
-              />
-            )}
-            keyExtractor={(item, index) => index.toString()}
-          />
-          <Button
-            title="Add Task"
-            onPress={() =>
-              handleAddTask(item.id, { operation: "on", duration: 5 })
-            }
-          />
+      <View style={styles.channelItemContainer}>
+        <View style={styles.channelHeader}>
+          <TouchableOpacity
+            onPress={() => {
+              if (expandedChannels.includes(item.pin)) {
+                setExpandedChannels((prev) =>
+                  prev.filter((id) => id !== item.pin)
+                );
+              } else {
+                setExpandedChannels((prev) => [...prev, item.pin]);
+              }
+            }}
+          >
+            <Text style={styles.channelName}>{`Channel ${item.pin}`}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              if (expandedChannels.includes(item.pin)) {
+                setExpandedChannels((prev) =>
+                  prev.filter((id) => id !== item.pin)
+                );
+              } else {
+                setExpandedChannels((prev) => [...prev, item.pin]);
+              }
+            }}
+          >
+            <AntDesign
+              name={expandedChannels.includes(item.pin) ? "up" : "down"}
+              size={20}
+              color="black"
+            />
+          </TouchableOpacity>
         </View>
-      ) : null}
-    </View>
-     <RoutineBar tasks={item.tasks} invertColors start={isRunning}/>
-     </>
+
+        {expandedChannels.includes(item.pin) ? (
+          <View style={{ marginTop: 6 }}>
+            <FlatList
+              data={item.actions}
+              renderItem={({ item: action }) => (
+                <TaskRow
+                  task={action}
+                  id={action.id}
+                  handleUpdateTask={handleUpdateAction}
+                  handleDeleteTask={handleDeleteTask}
+                />
+              )}
+              keyExtractor={(item) => item.id}
+            />
+            <Button
+              title="Add Task"
+              onPress={() =>
+                handleAddTask(item.pin, { operation: "on", duration: 5 })
+              }
+            />
+          </View>
+        ) : null}
+      </View>
+      <RoutineBar
+        tasks={item.actions}
+        // invertColors
+        start={isRunning}
+        onAnimationDone={() => setIsRunning(false)}
+      />
+    </>
   );
 
   if (isLoading || !routine) return <Text>Loading...</Text>;
@@ -243,9 +283,9 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={routine.channels}
+        data={routine.pinConfigurations}
         renderItem={renderChannelItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.pin.toString()}
         contentContainerStyle={styles.list}
       />
       {isRunning && (
@@ -345,7 +385,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   overlayText: {
     color: "white",
