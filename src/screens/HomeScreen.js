@@ -8,7 +8,7 @@ const HomeScreen = ({ navigation }) => {
         style={styles.button}
         onPress={() => navigation.navigate("RoutineList")}
       >
-        <Text style={styles.buttonText}>Routines2222</Text>
+        <Text style={styles.buttonText}>Routines</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.button}

@@ -7,22 +7,27 @@ import {
   StyleSheet,
   ActivityIndicator,
   Button,
+  Alert,
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
 import { TaskRow } from "../components/TaskRow";
 import RoutineBar from "../components/RoutineBar";
 import * as Crypto from "expo-crypto";
+import { deactivateKeepAwake, activateKeepAwake } from "expo-keep-awake";
+import usePrompt from "../hooks/usePrompt";
 
 const ViewRoutineScreen = ({ navigation, route }) => {
   const { id } = route.params;
   const [expandedChannels, setExpandedChannels] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [runningActionCount, setRunningActionCount] = useState(0);
   const { routinesApi, pinsApi, programApi } = useShooterApiContext();
   const [routine, setRoutine] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState(false);
 
+  const prompt = usePrompt();
   // Fetch the routine by ID when the component mounts
   useEffect(() => {
     const fetchRoutine = async () => {
@@ -60,45 +65,63 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     }
   }, [navigation, routine]);
 
+  // const activateKeepAwake = () => {
+  //   activateKeepAwakeAsync();
+  //   alert("Activated!");
+  // };
+
+  // const _deactivate = () => {
+  //   deactivateKeepAwake();
+  //   alert("Deactivated!");
+  // };
+
   // Function to add a new task to a channel
-  const handleAddTask = (channel_id) => {
-    const updatedChannels = routine.channels.map((channel) => {
-      if (channel.id !== channel_id) return channel;
+  const handleAddAction = (pin_id) => {
+    const updatedChannels = routine.pinConfigurations.map((pinConfig) => {
+      if (pinConfig.pin !== pin_id) return pinConfig;
       // Check if there are any tasks in this channel
-      if (channel.tasks.length === 0) {
-        // If no tasks, add a default task
-        return {
-          ...channel,
-          tasks: [...channel.tasks, { operation: "on", duration: 5 }], // You might want to add an id here
-        };
-      } else {
-        // If tasks exist, add a new task based on the last task
-        const lastTask = channel.tasks[channel.tasks.length - 1];
-        const newOperation = lastTask.operation === "on" ? "off" : "on";
-        const newDuration = lastTask.duration;
-
-        return {
-          ...channel,
-          tasks: [
-            ...channel.tasks,
-            { operation: newOperation, duration: newDuration },
-          ], // You might want to add an id here
-        };
-      }
+      return {
+        ...pinConfig,
+        actions: [...pinConfig.actions, { id: Crypto.randomUUID(), action: 0 }], // You might want to add an id here
+      };
     });
-
     // Optimistic update
     const updatedRoutine = {
       ...routine,
-      channels: updatedChannels,
+      pinConfigurations: updatedChannels,
     };
 
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
   };
 
-  const handleRun = () => {
+  const handleAddDelay = (pin_id) => {
+    const updatedChannels = routine.pinConfigurations.map((pinConfig) => {
+      if (pinConfig.pin !== pin_id) return pinConfig;
+      // Check if there are any tasks in this channel
+      return {
+        ...pinConfig,
+        actions: [
+          ...pinConfig.actions,
+          { id: Crypto.randomUUID(), delay: 5000 },
+        ], // You might want to add an id here
+      };
+    });
+    // Optimistic update
+    const updatedRoutine = {
+      ...routine,
+      pinConfigurations: updatedChannels,
+    };
+
+    setRoutine(updatedRoutine);
+    setPendingUpdates(true);
+  };
+
+  const handleRun = async () => {
     setIsRunning(true);
+
+    //TODO: Här är jag nu, försöker lösa hur vi ska göra med att loadern avslutar för "tidigt"
+    // setRunningActionCount(routine.actions.length);
     programApi
       .run(routine.id)
       .then((response) => {
@@ -111,6 +134,16 @@ const ViewRoutineScreen = ({ navigation, route }) => {
         console.error("Error running routine:", error);
       });
   };
+
+  useEffect(() => {
+    console.log("The view is in sight..");
+    activateKeepAwake();
+
+    return () => {
+      console.log("The view is destroyed");
+      deactivateKeepAwake();
+    };
+  }, []);
 
   const handleUpdateAction = async (taskId, updatedData) => {
     // Find the channel and task to update
@@ -133,7 +166,6 @@ const ViewRoutineScreen = ({ navigation, route }) => {
         };
       }
     );
-
     // Optimistic update for a better user experience
     const updatedRoutine = {
       ...routine,
@@ -143,6 +175,52 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     console.log("updated routine", updatedRoutine);
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
+  };
+
+  const handleRemovePinConfiguration = (pinId) => {
+    Alert.alert(`Remove pin ${pinId}?`, "", [
+      {
+        text: "Cancel",
+      },
+      {
+        text: "Yes",
+        onPress: () => {
+          const filteredPinConfigs = routine.pinConfigurations.filter(
+            (x) => x.pin != pinId
+          );
+
+          const updatedRoutine = {
+            ...routine,
+            pinConfigurations: filteredPinConfigs,
+          };
+          setRoutine(updatedRoutine);
+          setPendingUpdates(true);
+          console.log("pin found?", filteredPinConfigs);
+        },
+      },
+    ]);
+  };
+
+  handleQuickAddPinConfiguration = async () => {
+    console.log("add pin!");
+    const userInput = await prompt();
+    if (userInput !== null) {
+      console.log("User input:", userInput);
+      // You can now use the userInput variable as needed
+      const pinConfig = {
+        pin: userInput,
+        actions: [],
+      };
+
+      const updatedRoutine = {
+        ...routine,
+        pinConfigurations: [...(routine.pinConfigurations || []), pinConfig],
+      };
+      setRoutine(updatedRoutine);
+      setPendingUpdates(true);
+    } else {
+      console.log("User canceled the prompt");
+    }
   };
 
   const handleDeleteTask = (id) => {
@@ -215,6 +293,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
       <View style={styles.channelItemContainer}>
         <View style={styles.channelHeader}>
           <TouchableOpacity
+            onLongPress={() => handleRemovePinConfiguration(item.pin)}
             onPress={() => {
               if (expandedChannels.includes(item.pin)) {
                 setExpandedChannels((prev) =>
@@ -225,7 +304,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
               }
             }}
           >
-            <Text style={styles.channelName}>{`Channel ${item.pin}`}</Text>
+            <Text style={styles.channelName}>{`Pin ${item.pin}`}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
@@ -260,12 +339,18 @@ const ViewRoutineScreen = ({ navigation, route }) => {
               )}
               keyExtractor={(item) => item.id}
             />
-            <Button
-              title="Add Task"
-              onPress={() =>
-                handleAddTask(item.pin, { operation: "on", duration: 5 })
-              }
-            />
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <Button
+                title="+ Action"
+                onPress={() => handleAddAction(item.pin)}
+              />
+              <Button
+                title="+ Delay"
+                onPress={() => handleAddDelay(item.pin)}
+              />
+            </View>
           </View>
         ) : null}
       </View>
@@ -283,10 +368,15 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={routine.pinConfigurations}
+        data={routine.pinConfigurations ?? []}
         renderItem={renderChannelItem}
         keyExtractor={(item) => item.pin.toString()}
         contentContainerStyle={styles.list}
+        ListFooterComponent={
+          <View style={{ margin: 16 }}>
+            <Button title="Add pin" onPress={handleQuickAddPinConfiguration} />
+          </View>
+        }
       />
       {isRunning && (
         <View style={styles.overlay}>

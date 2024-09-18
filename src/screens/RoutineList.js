@@ -8,10 +8,14 @@ import {
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
+import * as Crypto from "expo-crypto";
+import usePrompt from "../hooks/usePrompt";
 
 const RoutineListScreen = ({ navigation }) => {
   const [routines, setRoutines] = useState([]);
   const { routinesApi, pinsApi, programApi } = useShooterApiContext();
+
+  const prompt = usePrompt();
 
   useEffect(() => {
     if (programApi) fetchRoutines();
@@ -47,6 +51,35 @@ const RoutineListScreen = ({ navigation }) => {
     }
   };
 
+  const quickCreateNewRoutine = async () => {
+    const userInput = await prompt();
+    if (userInput !== null) {
+      console.log("User input:", userInput);
+      // You can now use the userInput variable as needed
+      const program = {
+        id: Crypto.randomUUID(),
+        name: userInput,
+        pinConfigurations: [],
+      };
+
+      try {
+        var res = await programApi.createOrUpdate(program);
+        console.log("success create new program", res);
+        fetchRoutines();
+      } catch (e) {
+        console.error("Error saving program", program);
+      }
+      // const updatedRoutine = {
+      //   ...routine,
+      //   pinConfigurations: [...(routine.pinConfigurations || []), pinConfig],
+      // };
+      // setRoutine(updatedRoutine);
+      // setPendingUpdates(true);
+    } else {
+      console.log("User canceled the prompt");
+    }
+  };
+
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.routineItem}
@@ -76,7 +109,7 @@ const RoutineListScreen = ({ navigation }) => {
   const renderEmptyItem = () => (
     <TouchableOpacity
       style={styles.routineItem}
-      onPress={() => navigation.navigate("CreateRoutine")} // Navigate to NewRoutineWizard
+      onPress={() => quickCreateNewRoutine()} // Navigate to NewRoutineWizard
     >
       <View style={styles.routineNameContainer}>
         <Text style={styles.routineName}>New routine...</Text>
