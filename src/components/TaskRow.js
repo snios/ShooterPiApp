@@ -15,8 +15,6 @@ export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
   const [newOperation, setNewOperation] = useState(task.action);
   const [newDuration, setNewDuration] = useState(task.delay);
 
-  console.log("Task", task);
-
   const handleSaveAction = () => {
     let duration = parseFloat(newDuration);
     if (isNaN(duration)) {
@@ -31,6 +29,15 @@ export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
       duration = 0;
     }
     handleUpdateTask(id, { delay: duration });
+    setIsEditing(false);
+  };
+
+  const handleSwitchToAction = () => {
+    handleUpdateTask(id, { action: 0 });
+    setIsEditing(false);
+  };
+  const handleSwitchToDelay = () => {
+    handleUpdateTask(id, { delay: 5000 });
     setIsEditing(false);
   };
 
@@ -59,6 +66,12 @@ export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
                 style={styles.editableText}
                 keyboardType="numeric"
               />
+              <Button
+                title="Switch"
+                onPress={() => {
+                  handleSwitchToAction();
+                }}
+              />
               <Button title="Done" onPress={handleSaveDelay} />
             </>
           ) : (
@@ -69,6 +82,12 @@ export const TaskRow = ({ task, id, handleUpdateTask, handleDeleteTask }) => {
                 ios_backgroundColor="#3e3e3e"
                 onValueChange={() => handleToggle(newOperation)}
                 value={newOperation === 0}
+              />
+              <Button
+                title="Switch"
+                onPress={() => {
+                  handleSwitchToDelay();
+                }}
               />
               <Button title="Done" onPress={handleSaveAction} />
             </>

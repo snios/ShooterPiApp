@@ -29,7 +29,7 @@ const useProgramApi = (serverUrl) => {
   // };
 
   const remove = (id) => {
-    return api.get(`/pins/${id}`);
+    return api.get(`/delete`, { params: { id } });
   };
   const run = (id) => {
     console.log("run program by id::", id);

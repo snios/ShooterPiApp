@@ -5,6 +5,7 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  Alert,
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
@@ -33,13 +34,25 @@ const RoutineListScreen = ({ navigation }) => {
     }
   };
 
-  const handleDeleteRoutine = async (id) => {
-    try {
-      await routinesApi.remove(id);
-      fetchRoutines();
-    } catch (error) {
-      console.error("Error deleting routine:", error);
-    }
+  const handleDeleteProgram = async (id) => {
+    Alert.alert("Delete", "Delete this program?", [
+      {
+        text: "Yes",
+        onPress: async () => {
+          try {
+            await programApi.remove(id);
+            await fetchRoutines();
+          } catch (error) {
+            console.error("Error deleting routine:", error);
+          }
+        },
+      },
+      {
+        text: "No",
+      },
+    ]);
+    // await routinesApi.remove(id);
+    fetchRoutines();
   };
 
   const handleRunRutine = async (id) => {
@@ -84,18 +97,18 @@ const RoutineListScreen = ({ navigation }) => {
     <TouchableOpacity
       style={styles.routineItem}
       onPress={() => navigation.navigate("ViewRoutine", { id: item.id })} // Navigate to ViewRoutineScreen
-      // onLongPress={() => handleDeleteRoutine(item.id)}
+      onLongPress={() => handleDeleteProgram(item.id)}
     >
       <View style={styles.routineNameContainer}>
         <Text style={styles.routineName}>{item.name}</Text>
       </View>
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.editButton}
           onPress={() => navigation.navigate("EditRoutine", { id: item.id })}
         >
           <Text style={styles.buttonText}>Edit</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity
           style={styles.playButton}
           onPress={() => handleRunRutine(item.id)}

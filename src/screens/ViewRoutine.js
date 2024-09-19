@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState, useEffect } from "react";
+import React, { useLayoutEffect, useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -22,10 +22,11 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   const [expandedChannels, setExpandedChannels] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [runningActionCount, setRunningActionCount] = useState(0);
-  const { routinesApi, pinsApi, programApi } = useShooterApiContext();
+  const { programApi } = useShooterApiContext();
   const [routine, setRoutine] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState(false);
+  const [callout, setCallout] = useState("");
 
   const prompt = usePrompt();
   // Fetch the routine by ID when the component mounts
@@ -155,7 +156,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
           console.log("found the one...", action, updatedData);
 
           return {
-            ...action,
+            id: action.id,
             ...updatedData,
           };
         });
@@ -288,6 +289,46 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     }
   };
 
+  const longestDelay = useMemo(() => {
+    // Function to calculate total delay time
+    const calculateTotalDelay = (pinConfiguration) => {
+      return pinConfiguration.actions.reduce((totalDelay, action) => {
+        return totalDelay + (action.delay || 0); // Add delay or 0 if not present
+      }, 0);
+    };
+
+    // Find the pinConfiguration with the longest total delay
+    return routine?.pinConfigurations.reduce((maxDelay, config) => {
+      const totalDelay = calculateTotalDelay(config);
+      return Math.max(maxDelay, totalDelay);
+    }, 0);
+  }, [routine]);
+
+  // Callouts while running. Not that safe...
+  useEffect(() => {
+    if (isRunning && longestDelay > 0) {
+      setCallout(`10 sekunder kvar`);
+
+      const firstTimeout = setTimeout(() => {
+        setCallout("Färdiga");
+      }, 7000);
+
+      const secondTimeout = setTimeout(() => {
+        setCallout("ELD!!");
+      }, 9900);
+
+      const thirdTimeout = setTimeout(() => {
+        setCallout("ELD...UPP...HÖR");
+      }, longestDelay - 3100);
+
+      return () => {
+        clearTimeout(firstTimeout);
+        clearTimeout(secondTimeout);
+        clearTimeout(thirdTimeout);
+      };
+    }
+  }, [isRunning, longestDelay]);
+
   const renderChannelItem = ({ item }) => (
     <>
       <View style={styles.channelItemContainer}>
@@ -381,7 +422,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
       {isRunning && (
         <View style={styles.overlay}>
           <ActivityIndicator size="large" color="white" />
-          <Text style={styles.overlayText}>Routine Running...</Text>
+          <Text style={styles.overlayText}>{callout}</Text>
         </View>
       )}
       <TouchableOpacity
