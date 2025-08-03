@@ -1,41 +1,38 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Animated, Easing, Dimensions, StyleSheet } from "react-native";
-import PropTypes from "prop-types";
 
 const RoutineBar = ({
-  tasks: actions,
-  start,
-  invertColors,
+  tasks = [],
+  start = false,
+  invertColors = false,
   onAnimationDone,
 }) => {
-  console.log("routeinbar", actions);
-  const totalDuration = actions.reduce(
+  const totalDuration = tasks.reduce(
     (acc, routine) => acc + (routine?.delay || 0),
     0
   );
-  console.log("routeinbar", totalDuration);
+
   const screenWidth = Dimensions.get("window").width;
-  const barWidth = screenWidth - 32;
 
   const [isPlaying, setIsPlaying] = useState(false);
   const animation = useRef(new Animated.Value(0)).current;
 
   const processData = (data) => {
-    let lastAction = 0; // Default action for the first delay item if it's the first in the array
+    let lastAction = 0;
 
-    return data.map((item, index) => {
+    return data.map((item) => {
       if ("delay" in item) {
-        // For delay items, assign the last action seen or default to 1 if it's the first item
         return { ...item, action: lastAction };
       } else if ("action" in item) {
-        // Update lastAction to the current action for future delay items
         lastAction = item.action;
+        return item;
+      } else {
         return item;
       }
     });
   };
 
-  const processedData = processData(actions);
+  const processedData = processData(tasks);
 
   useEffect(() => {
     if (start) {
@@ -52,7 +49,7 @@ const RoutineBar = ({
         useNativeDriver: false,
       }).start(() => {
         setIsPlaying(false);
-        onAnimationDone();
+        onAnimationDone?.(); // optional chaining in case it's undefined
         animation.setValue(0);
       });
     }
@@ -75,9 +72,11 @@ const RoutineBar = ({
               : invertColors
               ? "green"
               : "red";
+
           const widthPercent = `${
             ((action?.delay || 0) / totalDuration) * 100
           }%`;
+
           return (
             <View
               key={index}
@@ -90,6 +89,7 @@ const RoutineBar = ({
             />
           );
         })}
+
         <Animated.View
           style={{
             position: "absolute",
@@ -121,22 +121,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
   },
 });
-
-RoutineBar.propTypes = {
-  tasks: PropTypes.arrayOf(
-    PropTypes.shape({
-      operation: PropTypes.string,
-      duration: PropTypes.number,
-    })
-  ),
-  start: PropTypes.bool,
-  invertColors: PropTypes.bool,
-};
-
-RoutineBar.defaultProps = {
-  tasks: [],
-  start: false,
-  invertColors: false,
-};
 
 export default RoutineBar;

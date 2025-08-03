@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Button,
   Alert,
+  Switch,
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
@@ -16,6 +17,15 @@ import RoutineBar from "../components/RoutineBar";
 import * as Crypto from "expo-crypto";
 import { deactivateKeepAwake, activateKeepAwake } from "expo-keep-awake";
 import usePrompt from "../hooks/usePrompt";
+import { useAudioPlayer } from "expo-audio";
+import { soundLabels, useRoutineMetadata } from "../hooks/useRoutineMetadata";
+
+const ten_seconds = require("../../assets/10sek.mp3");
+const all_ready = require("../../assets/allaklara.mp3");
+const fire = require("../../assets/eld.mp3");
+const ceasefire = require("../../assets/seasefire.mp3");
+const ready = require("../../assets/ready.mp3");
+const load = require("../../assets/load.mp3");
 
 const ViewRoutineScreen = ({ navigation, route }) => {
   const { id } = route.params;
@@ -28,6 +38,28 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   const [pendingUpdates, setPendingUpdates] = useState(false);
   const [callout, setCallout] = useState("");
 
+  const playerTenSek = useAudioPlayer(ten_seconds);
+  const playerReady = useAudioPlayer(ready);
+  const playerAllReady = useAudioPlayer(all_ready);
+  const playerSeaseFire = useAudioPlayer(ceasefire);
+  const playerFire = useAudioPlayer(fire);
+  const playerLoad = useAudioPlayer(load);
+
+  // Inuti komponenten
+  const { metadata, updateMetadata } = useRoutineMetadata(routine?.id);
+
+  const handleToggleSound = (key) => {
+    if (!metadata) return;
+    const updated = {
+      ...metadata,
+      playSounds: {
+        ...metadata.playSounds,
+        [key]: !metadata.playSounds[key],
+      },
+    };
+    updateMetadata(updated);
+  };
+
   const prompt = usePrompt();
   // Fetch the routine by ID when the component mounts
   useEffect(() => {
@@ -35,7 +67,6 @@ const ViewRoutineScreen = ({ navigation, route }) => {
       setIsLoading(true);
       try {
         const fetchedRoutine = await programApi.getById(id);
-        console.log("fetchRoutine success", fetchedRoutine.data);
         // Process the data to include fake IDs
         const processedData = {
           ...fetchedRoutine.data,
@@ -306,19 +337,35 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
   // Callouts while running. Not that safe...
   useEffect(() => {
-    if (isRunning && longestDelay > 0) {
-      setCallout(`10 sekunder kvar`);
+    if (isRunning && longestDelay > 0 && metadata?.playSounds) {
+      if (metadata.playSounds.ten_seconds) {
+        setCallout("10 sekunder kvar");
+        playerTenSek.seekTo(0);
+        playerTenSek.play();
+      }
 
       const firstTimeout = setTimeout(() => {
-        setCallout("Färdiga");
+        if (metadata.playSounds.ready) {
+          playerReady.seekTo(0);
+          playerReady.play();
+          setCallout("Färdiga");
+        }
       }, 7000);
 
       const secondTimeout = setTimeout(() => {
-        setCallout("ELD!!");
+        if (metadata.playSounds.fire) {
+          playerFire.seekTo(0);
+          playerFire.play();
+          setCallout("ELD!!");
+        }
       }, 9900);
 
       const thirdTimeout = setTimeout(() => {
-        setCallout("ELD...UPP...HÖR");
+        if (metadata.playSounds.ceasefire) {
+          playerSeaseFire.seekTo(0);
+          playerSeaseFire.play();
+          setCallout("ELD...UPP...HÖR");
+        }
       }, longestDelay - 3100);
 
       return () => {
@@ -327,7 +374,10 @@ const ViewRoutineScreen = ({ navigation, route }) => {
         clearTimeout(thirdTimeout);
       };
     }
-  }, [isRunning, longestDelay]);
+  }, [isRunning, longestDelay, metadata]);
+  
+
+ 
 
   const renderChannelItem = ({ item }) => (
     <>
@@ -425,6 +475,40 @@ const ViewRoutineScreen = ({ navigation, route }) => {
           <Text style={styles.overlayText}>{callout}</Text>
         </View>
       )}
+      <View style={styles.manualButtonRow}>
+        <TouchableOpacity
+          style={styles.manualButton}
+          onPress={() => {
+            playerLoad.seekTo(0);
+            playerLoad.play();
+          }}
+        >
+          <Text style={styles.manualButtonText}>Ladda</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.manualButton}
+          onPress={() => {
+            playerAllReady.seekTo(0);
+            playerAllReady.play();
+          }}
+        >
+          <Text style={styles.manualButtonText}>Alla klara?</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.togglePanel}>
+        <Text style={styles.togglePanelTitle}>Automatiska ljudutrop</Text>
+        {Object.keys(soundLabels).map((key) => (
+          <View key={key} style={styles.toggleRow}>
+            <Text style={styles.toggleLabel}>{soundLabels[key]}</Text>
+            <Switch
+              value={metadata?.playSounds?.[key] ?? true}
+              onValueChange={() => handleToggleSound(key)}
+            />
+          </View>
+        ))}
+      </View>
       <TouchableOpacity
         style={[
           styles.playButton,
@@ -517,12 +601,63 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.2)",
+    zIndex: 10, // 👈 viktigt!
   },
   overlayText: {
     color: "white",
     fontSize: 18,
     fontWeight: "bold",
     marginTop: 10,
+  },
+  manualButtonRow: {
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    marginTop: 16,
+    marginHorizontal: 16,
+  },
+
+  manualButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 6,
+    alignItems: "center",
+  },
+
+  manualButtonText: {
+    color: "white",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  togglePanel: {
+    margin: 16,
+    padding: 16,
+    backgroundColor: "white",
+    borderRadius: 12,
+    elevation: 3,
+  },
+
+  togglePanelTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 12,
+    color: "#333",
+  },
+
+  toggleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+
+  toggleLabel: {
+    fontSize: 16,
+    color: "#333",
   },
 });
 

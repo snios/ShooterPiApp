@@ -40,8 +40,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
-    
+      ],
+      "expo-audio"
     ]
   }
 }
