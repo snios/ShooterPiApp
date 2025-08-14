@@ -1,10 +1,22 @@
 import { useEffect } from "react";
 import axios from "axios";
+import { useWifiBinding } from "../contexts/WifiBindingProvider";
 
 const useProgramApi = (serverUrl) => {
+  const { bind } = useWifiBinding();
+
   const api = axios.create({
     baseURL: serverUrl,
   });
+
+  useEffect(() => {
+    const reqId = api.interceptors.request.use(async (config) => {
+      console.log("binding before request");
+      await bind(); // säkerställ routing före varje request
+      return config;
+    });
+    return () => api.interceptors.request.eject(reqId);
+  }, [bind]);
 
   useEffect(() => {
     api.defaults.baseURL = serverUrl;

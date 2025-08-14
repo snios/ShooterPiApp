@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import axios from "axios";
+import { useWifiBinding } from "../contexts/WifiBindingProvider";
 
 const usePinsApi = (serverUrl) => {
+
+  const { bind } = useWifiBinding();
+
   const api = axios.create({
     baseURL: serverUrl,
   });
@@ -9,6 +13,15 @@ const usePinsApi = (serverUrl) => {
   useEffect(() => {
     api.defaults.baseURL = serverUrl;
   }, [serverUrl]);
+
+  useEffect(() => {
+    const reqId = api.interceptors.request.use(async (config) => {
+      console.log('binding before request');
+      await bind(); // säkerställ routing före varje request
+      return config;
+    });
+    return () => api.interceptors.request.eject(reqId);
+  }, [bind]);
 
   const get = () => {
     console.log("get all pins:: url", serverUrl);
