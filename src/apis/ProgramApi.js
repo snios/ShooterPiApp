@@ -20,6 +20,12 @@ const useProgramApi = (serverUrl) => {
     return api.get("/load", { params: { id: id } });
   };
 
+  const getFwVersion = () => {
+    console.log('Get firmware version');
+
+    return api.get("/version");
+  }
+
   const createOrUpdate = (pinData) => {
     return api.post("/save", pinData);
   };
@@ -44,6 +50,7 @@ const useProgramApi = (serverUrl) => {
     createOrUpdate,
     remove,
     run,
+    getFwVersion,
   };
 };
 
