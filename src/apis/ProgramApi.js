@@ -3,7 +3,7 @@ import axios from "axios";
 import { useWifiBinding } from "../contexts/WifiBindingProvider";
 
 const useProgramApi = (serverUrl) => {
-  const { bind } = useWifiBinding();
+  const { bindIfNeeded } = useWifiBinding();
 
   const api = axios.create({
     baseURL: serverUrl,
@@ -12,11 +12,11 @@ const useProgramApi = (serverUrl) => {
   useEffect(() => {
     const reqId = api.interceptors.request.use(async (config) => {
       console.log("binding before request");
-      await bind(); // säkerställ routing före varje request
+      await bindIfNeeded(); // säkerställ routing före varje request
       return config;
     });
     return () => api.interceptors.request.eject(reqId);
-  }, [bind]);
+  }, [bindIfNeeded]);
 
   useEffect(() => {
     api.defaults.baseURL = serverUrl;

@@ -19,7 +19,6 @@ import { useWifiBinding } from "../contexts/WifiBindingProvider";
 
 export default function SettingsScreen() {
   const { programApi } = useShooterApiContext();
-  const { ensureBoundFor } = useWifiBinding();
   const [loading, setLoading] = useState(false);
 
   const { serverUrl, setServerUrl } = useShooterApiContext();
@@ -33,7 +32,7 @@ export default function SettingsScreen() {
   const handleDownloadRoutines = async () => {
     setLoading(true);
     try {
-      const result = await ensureBoundFor(async () => {
+
         // 1) Hämta lista
         const listRes = await programApi.get(); // förväntar { data: [{id, name, ...}] }
         const list = Array.isArray(listRes?.data) ? listRes.data : [];
@@ -59,8 +58,8 @@ export default function SettingsScreen() {
 
         // 3) Skriv EN fil (överskriv alltid)
         await deleteRoutinesDb();
-        return await writeRoutinesDb(items);
-      });
+        var result = await writeRoutinesDb(items);
+
 
       Alert.alert(
         "Klart",
@@ -105,20 +104,18 @@ export default function SettingsScreen() {
         return;
       }
 
-      // Kör allt under bindning
-      await ensureBoundFor(async () => {
-        for (const r of db.items) {
-          // TODO: anropa ditt API, t.ex.:
-          // await programApi.save(r);
-          try{
-            await programApi.createOrUpdate(r);
-          }catch(e){
-            console.error('failed to provision', e);
-          }
-         
-          console.log("provision routine", r); // <-- ska nu logga
+      for (const r of db.items) {
+        // TODO: anropa ditt API, t.ex.:
+        // await programApi.save(r);
+        try{
+          await programApi.createOrUpdate(r);
+        }catch(e){
+          console.error('failed to provision', e);
         }
-      });
+        
+        console.log("provision routine", r); // <-- ska nu logga
+      }
+  
 
       Alert.alert("Klart", `Provisionerade ${db.items.length} rutin(er).`);
     } catch (e) {
