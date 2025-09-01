@@ -65,6 +65,9 @@ const RoutineListScreen = ({ navigation }) => {
   };
 
   const quickCreateNewRoutine = async () => {
+
+    navigation.navigate("NewRoutineWizard");
+    return;
     const userInput = await prompt();
     if (userInput !== null) {
       console.log("User input:", userInput);
