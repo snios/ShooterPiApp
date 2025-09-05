@@ -321,7 +321,13 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
   // Callouts while running. Not that safe...
   useEffect(() => {
-    if (isRunning && longestDelay > 0 && metadata?.playSounds) {
+
+    const shootTimeMs =
+      Number.isFinite(metadata?.shootTimeMs) && (metadata?.shootTimeMs ?? 0) > 0
+        ? metadata.shootTimeMs
+        : (longestDelay || 60000); // fallback
+
+    if (isRunning && shootTimeMs > 0 && metadata?.playSounds) {
       if (metadata.playSounds.ten_seconds) {
         setCallout("10 sekunder kvar");
         playerTenSek.seekTo(0);
@@ -350,7 +356,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
           playerSeaseFire.play();
           setCallout("ELD...UPP...HÖR");
         }
-      }, longestDelay - 3100);
+      }, shootTimeMs - 3100);
 
       return () => {
         clearTimeout(firstTimeout);
