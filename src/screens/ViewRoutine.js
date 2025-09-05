@@ -15,7 +15,7 @@ import { useShooterApiContext } from "../contexts/ShooterAPIContext";
 import { TaskRow } from "../components/TaskRow";
 import RoutineBar from "../components/RoutineBar";
 import * as Crypto from "expo-crypto";
-import { deactivateKeepAwake, activateKeepAwake } from "expo-keep-awake";
+import { useKeepAwake } from "expo-keep-awake";
 import usePrompt from "../hooks/usePrompt";
 import { useAudioPlayer } from "expo-audio";
 import { soundLabels, useRoutineMetadata } from "../hooks/useRoutineMetadata";
@@ -28,6 +28,8 @@ const ready = require("../../assets/ready.mp3");
 const load = require("../../assets/load.mp3");
 
 const ViewRoutineScreen = ({ navigation, route }) => {
+  useKeepAwake();
+  
   const { id } = route.params;
   const [expandedChannels, setExpandedChannels] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -97,16 +99,6 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     }
   }, [navigation, routine]);
 
-  // const activateKeepAwake = () => {
-  //   activateKeepAwakeAsync();
-  //   alert("Activated!");
-  // };
-
-  // const _deactivate = () => {
-  //   deactivateKeepAwake();
-  //   alert("Deactivated!");
-  // };
-
   // Function to add a new task to a channel
   const handleAddAction = (pin_id) => {
     const updatedChannels = routine.pinConfigurations.map((pinConfig) => {
@@ -166,16 +158,6 @@ const ViewRoutineScreen = ({ navigation, route }) => {
         console.error("Error running routine:", error);
       });
   };
-
-  useEffect(() => {
-    console.log("The view is in sight..");
-    activateKeepAwake();
-
-    return () => {
-      console.log("The view is destroyed");
-      deactivateKeepAwake();
-    };
-  }, []);
 
   const handleUpdateAction = async (taskId, updatedData) => {
     // Find the channel and task to update
