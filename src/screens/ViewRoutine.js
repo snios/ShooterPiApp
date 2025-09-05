@@ -19,6 +19,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import usePrompt from "../hooks/usePrompt";
 import { useAudioPlayer } from "expo-audio";
 import { soundLabels, useRoutineMetadata } from "../hooks/useRoutineMetadata";
+import { ThemedInput } from "@/components/ThemedInput";
 
 const ten_seconds = require("../../assets/10sek.mp3");
 const all_ready = require("../../assets/allaklara.mp3");
@@ -61,6 +62,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     };
     updateMetadata(updated);
   };
+  
 
   const prompt = usePrompt();
   // Fetch the routine by ID when the component mounts
@@ -438,6 +440,9 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
   if (isLoading || !routine) return <Text>Loading...</Text>;
 
+  const shootTimeSecDisplay = String(
+    Math.max(0, Math.round(((metadata?.shootTimeMs ?? longestDelay)) / 1000))
+  );
   return (
     <View style={styles.container}>
       <FlatList
@@ -481,6 +486,31 @@ const ViewRoutineScreen = ({ navigation, route }) => {
 
       <View style={styles.togglePanel}>
         <Text style={styles.togglePanelTitle}>Automatiska ljudutrop</Text>
+
+        <View style={styles.shootTimeRow}>
+          <Text style={styles.toggleLabel}>Skjuttid (sek)</Text>
+          <ThemedInput
+            // style={styles.shootTimeInput}
+            
+            keyboardType="numeric"
+            value={shootTimeSecDisplay}
+            onChangeText={(val) => {
+              const num = Number((val || "").replace(",", "."));
+              if (!Number.isFinite(num)) return;
+              const ms = Math.max(0, Math.round(num * 1000));
+              updateMetadata({
+                ...(metadata || {}),
+                playSounds: metadata?.playSounds ?? {
+                  ten_seconds: true,
+                  ready: true,
+                  fire: true,
+                  ceasefire: true,
+                },
+                shootTimeMs: ms,
+              });
+            }}
+          />
+        </View>
         {Object.keys(soundLabels).map((key) => (
           <View key={key} style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>{soundLabels[key]}</Text>
@@ -640,6 +670,26 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 16,
     color: "#333",
+  },
+  shootTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  shootTimeInput: {
+    width: 90,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    textAlign: "center",
+    backgroundColor: "#fafafa",
+    fontSize: 16,
   },
 });
 
