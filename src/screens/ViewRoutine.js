@@ -44,6 +44,11 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   const [expandedChannels, setExpandedChannels] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
 
+  const [panelOpen, setPanelOpen] = useState(true); // ← NYTT
+  const togglePanel = () => {
+    setPanelOpen((v) => !v);
+  };
+
   // ✅ Nytt: räkna aktiva kanaler, undvik dubbel-done och separera callouts
   const [channelsLeft, setChannelsLeft] = useState(0);
   const completedPinsRef = useRef(new Set());
@@ -501,7 +506,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
           </View>
         )}
 
-        <View className="manualButtonRow" style={styles.manualButtonRow}>
+        {/* <View className="manualButtonRow" style={styles.manualButtonRow}>
           <TouchableOpacity
             style={styles.manualButton}
             onPress={() => {
@@ -521,43 +526,113 @@ const ViewRoutineScreen = ({ navigation, route }) => {
           >
             <Text style={styles.manualButtonText}>Alla klara?</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
-        <View style={styles.togglePanel}>
-          <Text style={styles.togglePanelTitle}>Automatiska ljudutrop</Text>
-
-          <View style={styles.shootTimeRow}>
-            <Text style={styles.toggleLabel}>Skjuttid (sek)</Text>
-            <ThemedInput
-              keyboardType="numeric"
-              value={shootTimeSecDisplay}
-              onChangeText={(val) => {
-                const num = Number((val || "").replace(",", "."));
-                if (!Number.isFinite(num)) return;
-                const ms = Math.max(0, Math.round(num * 1000));
-                updateMetadata({
-                  ...(metadata || {}),
-                  playSounds: metadata?.playSounds ?? {
-                    ten_seconds: true,
-                    ready: true,
-                    fire: true,
-                    ceasefire: true,
-                  },
-                  shootTimeMs: ms,
-                });
-              }}
+        <View style={{ marginHorizontal: 0, marginBottom: 24 }}>
+          {/* Header-rad som togglar */}
+          <TouchableOpacity
+            onPress={togglePanel}
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: "#fff",
+              borderColor: "#eee",
+              borderWidth: StyleSheet.hairlineWidth,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={{ fontWeight: "700", color: "#333" }}>
+              Kontrollpanel
+            </Text>
+            <AntDesign
+              name={panelOpen ? "down" : "up"}
+              size={18}
+              color="#333"
             />
-          </View>
+          </TouchableOpacity>
 
-          {Object.keys(soundLabels).map((key) => (
-            <View key={key} style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>{soundLabels[key]}</Text>
-              <Switch
-                value={metadata?.playSounds?.[key] ?? true}
-                onValueChange={() => handleToggleSound(key)}
-              />
+          {/* Innehållet, visas bara när panelOpen = true */}
+          {panelOpen && (
+            <View
+              style={{
+                backgroundColor: "#fff",
+                borderColor: "#eee",
+                borderWidth: StyleSheet.hairlineWidth,
+                borderTopWidth: 0,
+                borderBottomLeftRadius: 10,
+                borderBottomRightRadius: 10,
+                padding: 12,
+                marginTop: -2, // liten visuell “join” mot headern
+              }}
+            >
+              {/* ======= DITT BEFINTLIGA INNEHÅLL NEDAN ======= */}
+
+              <View className="manualButtonRow" style={styles.manualButtonRow}>
+                <TouchableOpacity
+                  style={styles.manualButton}
+                  onPress={() => {
+                    playerLoad.seekTo(0);
+                    playerLoad.play();
+                  }}
+                >
+                  <Text style={styles.manualButtonText}>Ladda</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.manualButton}
+                  onPress={() => {
+                    playerAllReady.seekTo(0);
+                    playerAllReady.play();
+                  }}
+                >
+                  <Text style={styles.manualButtonText}>Alla klara?</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.togglePanel}>
+                <Text style={styles.togglePanelTitle}>
+                  Automatiska ljudutrop
+                </Text>
+
+                <View style={styles.shootTimeRow}>
+                  <Text style={styles.toggleLabel}>Skjuttid (sek)</Text>
+                  <ThemedInput
+                    keyboardType="numeric"
+                    value={shootTimeSecDisplay}
+                    onChangeText={(val) => {
+                      const num = Number((val || "").replace(",", "."));
+                      if (!Number.isFinite(num)) return;
+                      const ms = Math.max(0, Math.round(num * 1000));
+                      updateMetadata({
+                        ...(metadata || {}),
+                        playSounds: metadata?.playSounds ?? {
+                          ten_seconds: true,
+                          ready: true,
+                          fire: true,
+                          ceasefire: true,
+                        },
+                        shootTimeMs: ms,
+                      });
+                    }}
+                  />
+                </View>
+
+                {Object.keys(soundLabels).map((key) => (
+                  <View key={key} style={styles.toggleRow}>
+                    <Text style={styles.toggleLabel}>{soundLabels[key]}</Text>
+                    <Switch
+                      value={metadata?.playSounds?.[key] ?? true}
+                      onValueChange={() => handleToggleSound(key)}
+                    />
+                  </View>
+                ))}
+              </View>
             </View>
-          ))}
+          )}
         </View>
 
         <TouchableOpacity
