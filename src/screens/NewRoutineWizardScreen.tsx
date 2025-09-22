@@ -161,6 +161,7 @@ export default function NewRoutineWizardScreen() {
     const [localSegs, setLocalSegs] = useState<Segment[]>(() => [
       ...out.segments,
     ]);
+    const [splitAt, setSplitAt] = useState("");
 
     // resync om utgångens segment ändras utifrån (t.ex. total ändrad)
     useEffect(() => {
@@ -239,9 +240,12 @@ export default function NewRoutineWizardScreen() {
             variant="outline"
             placeholder="Dela vid s (t.ex. 3.5)"
             inputMode="decimal"
+            value={splitAt}
+            onChangeText={setSplitAt}
             onSubmitEditing={(e) => {
               const t = parseSeconds(e.nativeEvent.text);
               if (t > 0 && t < draft.totalDuration) addSplitAt(t);
+              setSplitAt(""); // 👈 rensa efter submit
             }}
             blurOnSubmit={false}
             style={{ flex: 1 }}

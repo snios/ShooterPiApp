@@ -1,6 +1,4 @@
 // WifiBindingProvider.kiss.js
-// Enkel: EN huvudknapp som gör rätt sak (anslut + bind) eller kopplar från.
-
 import React, {
   createContext,
   useContext,
@@ -17,15 +15,12 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  Linking,
+  Alert,
 } from "react-native";
 import WifiManager from "react-native-wifi-reborn";
 
-const C = {
-  CONNECT_TIMEOUT_MS: 7000,
-  SETTLE_MS: 800,
-  COOLDOWN_MS: 6000,
-};
-
+const C = { CONNECT_TIMEOUT_MS: 7000, SETTLE_MS: 800, COOLDOWN_MS: 6000 };
 const WifiCtx = createContext(null);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -44,7 +39,8 @@ export function WifiBindingProvider({
 
   const lastBindTsRef = useRef(0);
   const appStateRef = useRef(AppState.currentState);
-  const inFlightRef = useRef(Promise.resolve()); // serialisera anrop
+  const inFlightRef = useRef(Promise.resolve());
+  const pendingEnableWifiRef = useRef(false); // <— försök igen när vi blir aktiva
 
   // ---- Helpers ----
   const ensureAndroidWifiPermissions = async () => {
@@ -56,6 +52,48 @@ export function WifiBindingProvider({
       return res === PermissionsAndroid.RESULTS.GRANTED;
     } catch {
       return false;
+    }
+  };
+
+  const isWifiEnabled = async () => {
+    if (Platform.OS !== "android") return true;
+    try {
+      const enabled = await WifiManager.isEnabled(); // Android only
+      return !!enabled;
+    } catch {
+      return true;
+    }
+  };
+
+  // Öppna Wi-Fi-panel (Android 10+) eller Wi-Fi settings (äldre Android).
+  // På iOS: visa info och försök öppna Settings-appen (kan ignoreras).
+  const openWifiEnableUI = async () => {
+    if (Platform.OS === "android") {
+      try {
+        // Försök Settings Panel (Android 10+)
+        await Linking.sendIntent?.("android.settings.panel.action.WIFI");
+        return;
+      } catch {}
+      try {
+        // Fallback: full Wi-Fi settings
+        await Linking.sendIntent?.("android.settings.WIFI_SETTINGS");
+        return;
+      } catch {}
+      try {
+        await Linking.openSettings();
+      } catch {}
+      return;
+    } else {
+      // iOS: går ej toggla programmässigt
+      Alert.alert(
+        "Slå på Wi-Fi",
+        "Slå på Wi-Fi i Inställningar och kom tillbaka till appen.",
+        [{ text: "OK" }]
+      );
+      try {
+        // Vissa iOS-versioner ignorerar detta; det är bäst effort.
+        await Linking.openURL("App-Prefs:root=WIFI");
+      } catch {}
     }
   };
 
@@ -87,6 +125,16 @@ export function WifiBindingProvider({
   // ---- Basflöden ----
   const connectOnce = async ({ password = targetPass } = {}) => {
     setError(null);
+
+    // 0) Wi-Fi måste vara på (Android)
+    if (!(await isWifiEnabled())) {
+      setPhase("error");
+      setError("Wi-Fi är avstängt. Slå på Wi-Fi och försök igen.");
+      pendingEnableWifiRef.current = true; // försök igen när appen blir aktiv
+      await openWifiEnableUI();
+      return false;
+    }
+
     setPhase("connecting");
     await ensureAndroidWifiPermissions();
     await WifiManager.connectToProtectedSSID(
@@ -108,7 +156,7 @@ export function WifiBindingProvider({
   const bindOnce = async () => {
     setError(null);
     const ok = await refreshOnTarget();
-    if (!ok) return false; // bind endast om vi redan är på rätt SSID
+    if (!ok) return false; // bind endast om redan på rätt SSID
 
     if (Platform.OS === "android") {
       setPhase("binding");
@@ -137,21 +185,18 @@ export function WifiBindingProvider({
   // ---- EN knapp: anslut + bind, eller koppla från ----
   const connectAndBind = async () => {
     setError(null);
-    // Är vi redan bunden? Gör knappen som toggle → unbind.
     if (bound) {
       await unbind();
       return true;
     }
-    // Inte bunden → säkerställ att vi är på SSID, annars anslut.
     if (!(await refreshOnTarget())) {
       const ok = await connectOnce({});
       if (!ok) return false;
     }
-    // När vi väl är på SSID → bind en gång.
     return await bindOnce();
   };
 
-  // Ett enkelt ensure för API-anrop (binder bara om vi redan är på SSID)
+  // För API-anrop: binda endast om redan på SSID
   const ensureBoundIfOnTarget = async () => {
     return (inFlightRef.current = inFlightRef.current.then(async () => {
       if (!(await refreshOnTarget())) return false;
@@ -161,15 +206,24 @@ export function WifiBindingProvider({
     }));
   };
 
-  // Valfri: auto-bind när appen blir aktiv, men endast om vi redan är på rätt SSID
+  // Auto-bind vid återkomst till förgrund + hantera pendingEnableWifiRef
   useEffect(() => {
-    if (!autoBindOnForeground) return;
     const sub = AppState.addEventListener("change", async (state) => {
       const prev = appStateRef.current;
       appStateRef.current = state;
+
       if (prev !== "active" && state === "active") {
-        await ensureBoundIfOnTarget();
+        // Om användaren var ute och slog på Wi-Fi, försök klart flödet
+        if (pendingEnableWifiRef.current) {
+          pendingEnableWifiRef.current = false;
+          await connectAndBind();
+          return;
+        }
+        if (autoBindOnForeground) {
+          await ensureBoundIfOnTarget();
+        }
       }
+
       if (state !== "active" && bound) {
         await unbind();
       }
@@ -177,11 +231,10 @@ export function WifiBindingProvider({
     return () => sub?.remove?.();
   }, [autoBindOnForeground, bound]);
 
-  // ---- UI: enkel inline-banner som trycker ned innehållet ----
+  // ---- UI: banner ----
   function Banner() {
     if (!showBanner) return null;
     const Wrap = bannerSafeArea ? SafeAreaView : View;
-
     const isWorking = phase === "connecting" || phase === "binding";
     const primaryLabel = bound
       ? "Koppla från"
@@ -228,17 +281,15 @@ export function WifiBindingProvider({
   }
 
   const value = {
-    // state
     onTarget,
     bound,
     error,
     phase,
-    // actions
     refreshOnTarget,
-    connectOnce, // kvar om du vill använda manuellt
-    bindOnce, // kvar om du vill använda manuellt
-    connectAndBind, // <-- EN knapp: anslut + bind (eller unbind om redan bunden)
-    ensureBoundIfOnTarget, // för API-anrop
+    connectOnce,
+    bindOnce,
+    connectAndBind,
+    ensureBoundIfOnTarget,
     unbind,
   };
 
@@ -257,7 +308,6 @@ export function useWifiBinding() {
   return ctx;
 }
 
-// ---- Styles ----
 const styles = StyleSheet.create({
   bannerWrap: {
     backgroundColor: "#fff7e6",

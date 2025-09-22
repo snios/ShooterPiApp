@@ -43,7 +43,12 @@
         }
       ],
       "expo-audio",
-      ["react-native-wifi-reborn", { "fineLocationPermission": true }],
+      [
+        "react-native-wifi-reborn",
+        {
+          "fineLocationPermission": true
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -55,7 +60,8 @@
           },
           "imageWidth": 220
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

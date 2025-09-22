@@ -1,4 +1,11 @@
-import React, { useLayoutEffect, useState, useEffect, useMemo } from "react";
+import React, {
+  useLayoutEffect,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -9,8 +16,10 @@ import {
   Button,
   Alert,
   Switch,
+  KeyboardAvoidingView,
+  Platform
 } from "react-native";
-import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
+import { AntDesign } from "@expo/vector-icons";
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
 import { TaskRow } from "../components/TaskRow";
 import RoutineBar from "../components/RoutineBar";
@@ -30,11 +39,17 @@ const load = require("../../assets/load.mp3");
 
 const ViewRoutineScreen = ({ navigation, route }) => {
   useKeepAwake();
-  
+
   const { id } = route.params;
   const [expandedChannels, setExpandedChannels] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [runningActionCount, setRunningActionCount] = useState(0);
+
+  // ✅ Nytt: räkna aktiva kanaler, undvik dubbel-done och separera callouts
+  const [channelsLeft, setChannelsLeft] = useState(0);
+  const completedPinsRef = useRef(new Set());
+  const [isCalloutsActive, setIsCalloutsActive] = useState(false);
+  const calloutTimersRef = useRef([]);
+
   const { programApi } = useShooterApiContext();
   const [routine, setRoutine] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,7 +63,7 @@ const ViewRoutineScreen = ({ navigation, route }) => {
   const playerFire = useAudioPlayer(fire);
   const playerLoad = useAudioPlayer(load);
 
-  // Inuti komponenten
+  // Metadata inkl. skjuttid & toggles
   const { metadata, updateMetadata } = useRoutineMetadata(routine?.id);
 
   const handleToggleSound = (key) => {
@@ -62,16 +77,15 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     };
     updateMetadata(updated);
   };
-  
 
   const prompt = usePrompt();
-  // Fetch the routine by ID when the component mounts
+
+  // Hämta rutin
   useEffect(() => {
     const fetchRoutine = async () => {
       setIsLoading(true);
       try {
         const fetchedRoutine = await programApi.getById(id);
-        // Process the data to include fake IDs
         const processedData = {
           ...fetchedRoutine.data,
           pinConfigurations: fetchedRoutine.data.pinConfigurations.map(
@@ -79,12 +93,11 @@ const ViewRoutineScreen = ({ navigation, route }) => {
               ...config,
               actions: config.actions.map((action) => ({
                 ...action,
-                id: Crypto.randomUUID(), // Generate a unique ID for each action
+                id: Crypto.randomUUID(),
               })),
             })
           ),
         };
-        console.log("proccesed data", JSON.stringify(processedData));
         setRoutine(processedData);
       } catch (error) {
         console.error("Error fetching routine:", error);
@@ -101,79 +114,70 @@ const ViewRoutineScreen = ({ navigation, route }) => {
     }
   }, [navigation, routine]);
 
-  // Function to add a new task to a channel
+  // Add action
   const handleAddAction = (pin_id) => {
     const updatedChannels = routine.pinConfigurations.map((pinConfig) => {
       if (pinConfig.pin !== pin_id) return pinConfig;
-      // Check if there are any tasks in this channel
       return {
         ...pinConfig,
-        actions: [...pinConfig.actions, { id: Crypto.randomUUID(), action: 0 }], // You might want to add an id here
+        actions: [...pinConfig.actions, { id: Crypto.randomUUID(), action: 0 }],
       };
     });
-    // Optimistic update
-    const updatedRoutine = {
-      ...routine,
-      pinConfigurations: updatedChannels,
-    };
-
+    const updatedRoutine = { ...routine, pinConfigurations: updatedChannels };
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
   };
 
+  // Add delay
   const handleAddDelay = (pin_id) => {
     const updatedChannels = routine.pinConfigurations.map((pinConfig) => {
       if (pinConfig.pin !== pin_id) return pinConfig;
-      // Check if there are any tasks in this channel
       return {
         ...pinConfig,
         actions: [
           ...pinConfig.actions,
           { id: Crypto.randomUUID(), delay: 5000 },
-        ], // You might want to add an id here
+        ],
       };
     });
-    // Optimistic update
-    const updatedRoutine = {
-      ...routine,
-      pinConfigurations: updatedChannels,
-    };
-
+    const updatedRoutine = { ...routine, pinConfigurations: updatedChannels };
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
   };
 
+  // Starta körning + callouts
   const handleRun = async () => {
-    setIsRunning(true);
+    // Räkna bara kanaler som faktiskt har actions
+    const channelsToRun = (routine?.pinConfigurations ?? []).filter(
+      (cfg) => Array.isArray(cfg.actions) && cfg.actions.length > 0
+    ).length;
 
-    //TODO: Här är jag nu, försöker lösa hur vi ska göra med att loadern avslutar för "tidigt"
-    // setRunningActionCount(routine.actions.length);
+    completedPinsRef.current.clear();
+    setChannelsLeft(channelsToRun);
+
+    setIsRunning(true);
+    setIsCalloutsActive(true);
+
     programApi
       .run(routine.id)
-      .then((response) => {
-        // Handle success if needed
-        // setIsRunning(false);
+      .then(() => {
+        // ev. hantera OK
       })
       .catch((error) => {
-        setIsRunning(false);
-        // Handle error if needed
         console.error("Error running routine:", error);
+        setIsRunning(false);
+        // låt callouts fortsätta om du vill att "eld upphör" ändå ropas
+        // vill du avbryta även callouts här? lägg till: setIsCalloutsActive(false);
       });
   };
 
+  // Update action
   const handleUpdateAction = async (taskId, updatedData) => {
-    // Find the channel and task to update
     const updatedpinConfigurations = routine.pinConfigurations.map(
       (pinConfiguration) => {
         const updatedActions = pinConfiguration.actions.map((action) => {
           if (action.id !== taskId) return action;
-
-          console.log("found the one...", action, updatedData);
-
-          return {
-            id: action.id,
-            ...updatedData,
-          };
+          return { id: action.id, ...updatedData };
         });
 
         return {
@@ -182,66 +186,53 @@ const ViewRoutineScreen = ({ navigation, route }) => {
         };
       }
     );
-    // Optimistic update for a better user experience
+
     const updatedRoutine = {
       ...routine,
       pinConfigurations: updatedpinConfigurations,
     };
-
-    console.log("updated routine", updatedRoutine);
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
   };
 
+  // Remove pin
   const handleRemovePinConfiguration = (pinId) => {
     Alert.alert(`Remove pin ${pinId}?`, "", [
-      {
-        text: "Cancel",
-      },
+      { text: "Cancel" },
       {
         text: "Yes",
         onPress: () => {
           const filteredPinConfigs = routine.pinConfigurations.filter(
             (x) => x.pin != pinId
           );
-
           const updatedRoutine = {
             ...routine,
             pinConfigurations: filteredPinConfigs,
           };
           setRoutine(updatedRoutine);
           setPendingUpdates(true);
-          console.log("pin found?", filteredPinConfigs);
         },
       },
     ]);
   };
 
+  // Quick add pin
   handleQuickAddPinConfiguration = async () => {
-    console.log("add pin!");
     const userInput = await prompt();
     if (userInput !== null) {
-      console.log("User input:", userInput);
-      // You can now use the userInput variable as needed
-      const pinConfig = {
-        pin: userInput,
-        actions: [],
-      };
-
+      const pinConfig = { pin: userInput, actions: [] };
       const updatedRoutine = {
         ...routine,
         pinConfigurations: [...(routine.pinConfigurations || []), pinConfig],
       };
       setRoutine(updatedRoutine);
       setPendingUpdates(true);
-    } else {
-      console.log("User canceled the prompt");
     }
   };
 
+  // Delete task
   const handleDeleteTask = (id) => {
     let found = false;
-    console.log("delete action", id);
     const updatedpinConfigurations = routine.pinConfigurations.map(
       (pinConfiguration) => {
         const updatedActions = pinConfiguration.actions.filter((action) => {
@@ -267,29 +258,26 @@ const ViewRoutineScreen = ({ navigation, route }) => {
       return;
     }
 
-    // Optimistic update
     const updatedRoutine = {
       ...routine,
       pinConfigurations: updatedpinConfigurations,
     };
-
     setRoutine(updatedRoutine);
     setPendingUpdates(true);
   };
 
+  // Save updates
   const handleSaveUpdates = async () => {
     try {
-      const response = await programApi.createOrUpdate(routine); // Replace with your actual API call
-      // If the API returns the updated routine, use it to update the state
+      const response = await programApi.createOrUpdate(routine);
       if (response.data) {
-        // Process the data to include fake IDs
         const processedData = {
           ...response.data,
           pinConfigurations: response.data.pinConfigurations.map((config) => ({
             ...config,
             actions: config.actions.map((action) => ({
               ...action,
-              id: Crypto.randomUUID(), // Generate a unique ID for each action
+              id: Crypto.randomUUID(),
             })),
           })),
         };
@@ -298,251 +286,297 @@ const ViewRoutineScreen = ({ navigation, route }) => {
       setPendingUpdates(false);
     } catch (error) {
       console.error("Error updating task:", error);
-      // Optionally, revert the optimistic update
-      setRoutine(routine);
       setPendingUpdates(false);
     }
   };
 
+  // Längsta total-delay per kanal (för fallback på skjuttid)
   const longestDelay = useMemo(() => {
-    // Function to calculate total delay time
-    const calculateTotalDelay = (pinConfiguration) => {
-      return pinConfiguration.actions.reduce((totalDelay, action) => {
-        return totalDelay + (action.delay || 0); // Add delay or 0 if not present
-      }, 0);
-    };
+    const calculateTotalDelay = (pinConfiguration) =>
+      pinConfiguration.actions.reduce(
+        (totalDelay, action) => totalDelay + (action.delay || 0),
+        0
+      );
 
-    // Find the pinConfiguration with the longest total delay
     return routine?.pinConfigurations.reduce((maxDelay, config) => {
       const totalDelay = calculateTotalDelay(config);
       return Math.max(maxDelay, totalDelay);
     }, 0);
   }, [routine]);
 
-  // Callouts while running. Not that safe...
+  // 🔈 ENKLA CALLOUTS — frikopplade från isRunning
   useEffect(() => {
+    if (!isCalloutsActive) return;
 
     const shootTimeMs =
       Number.isFinite(metadata?.shootTimeMs) && (metadata?.shootTimeMs ?? 0) > 0
         ? metadata.shootTimeMs
-        : (longestDelay || 60000); // fallback
+        : longestDelay || 60000;
 
-    if (isRunning && shootTimeMs > 0 && metadata?.playSounds) {
-      if (metadata.playSounds.ten_seconds) {
-        setCallout("10 sekunder kvar");
-        playerTenSek.seekTo(0);
-        playerTenSek.play();
-      }
+    // Rensa ev. gamla timers
+    calloutTimersRef.current.forEach(clearTimeout);
+    calloutTimersRef.current = [];
 
-      const firstTimeout = setTimeout(() => {
-        if (metadata.playSounds.ready) {
-          playerReady.seekTo(0);
-          playerReady.play();
-          setCallout("Färdiga");
-        }
-      }, 7000);
-
-      const secondTimeout = setTimeout(() => {
-        if (metadata.playSounds.fire) {
-          playerFire.seekTo(0);
-          playerFire.play();
-          setCallout("ELD!!");
-        }
-      }, 9900);
-
-      const thirdTimeout = setTimeout(() => {
-        if (metadata.playSounds.ceasefire) {
-          playerSeaseFire.seekTo(0);
-          playerSeaseFire.play();
-          setCallout("ELD...UPP...HÖR");
-        }
-      }, shootTimeMs - 3100);
-
-      return () => {
-        clearTimeout(firstTimeout);
-        clearTimeout(secondTimeout);
-        clearTimeout(thirdTimeout);
-      };
+    if (metadata?.playSounds?.ten_seconds) {
+      setCallout("10 sekunder kvar");
+      playerTenSek.seekTo(0);
+      playerTenSek.play();
     }
-  }, [isRunning, longestDelay, metadata]);
-  
 
- 
+    const t1 = setTimeout(() => {
+      if (metadata?.playSounds?.ready) {
+        playerReady.seekTo(0);
+        playerReady.play();
+        setCallout("Färdiga");
+      }
+    }, 7000);
 
-  const renderChannelItem = ({ item }) => (
-    <>
-      <View style={styles.channelItemContainer}>
-        <View style={styles.channelHeader}>
-          <TouchableOpacity
-            onLongPress={() => handleRemovePinConfiguration(item.pin)}
-            onPress={() => {
-              if (expandedChannels.includes(item.pin)) {
-                setExpandedChannels((prev) =>
-                  prev.filter((id) => id !== item.pin)
-                );
-              } else {
-                setExpandedChannels((prev) => [...prev, item.pin]);
-              }
-            }}
-          >
-            <Text style={styles.channelName}>{`Pin ${item.pin}`}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              if (expandedChannels.includes(item.pin)) {
-                setExpandedChannels((prev) =>
-                  prev.filter((id) => id !== item.pin)
-                );
-              } else {
-                setExpandedChannels((prev) => [...prev, item.pin]);
-              }
-            }}
-          >
-            <AntDesign
-              name={expandedChannels.includes(item.pin) ? "up" : "down"}
-              size={20}
-              color="black"
-            />
-          </TouchableOpacity>
+    const t2 = setTimeout(() => {
+      if (metadata?.playSounds?.fire) {
+        playerFire.seekTo(0);
+        playerFire.play();
+        setCallout("ELD!!");
+      }
+    }, 9900);
+
+    const t3 = setTimeout(() => {
+      if (metadata?.playSounds?.ceasefire) {
+        playerSeaseFire.seekTo(0);
+        playerSeaseFire.play();
+        setCallout("ELD...UPP...HÖR");
+      }
+      // Stäng callouts strax efter sista utropet
+      const tDone = setTimeout(() => setIsCalloutsActive(false), 500);
+      calloutTimersRef.current.push(tDone);
+    }, Math.max(0, shootTimeMs - 3100));
+
+    calloutTimersRef.current.push(t1, t2, t3);
+
+    return () => {
+      calloutTimersRef.current.forEach(clearTimeout);
+      calloutTimersRef.current = [];
+    };
+  }, [
+    isCalloutsActive,
+    longestDelay,
+    metadata,
+    playerTenSek,
+    playerReady,
+    playerFire,
+    playerSeaseFire,
+  ]);
+
+  // ✅ Stäng bara programmet när alla aktiva kanaler är klara
+  useEffect(() => {
+    if (isRunning && channelsLeft === 0) {
+      setIsRunning(false);
+      // OBS: låt isCalloutsActive leva vidare tills "eld upphör" har ropats
+    }
+  }, [isRunning, channelsLeft]);
+
+  // Räkna ner säkert (ingen dubbelräkning per pin)
+  const onChannelDone = useCallback((pin) => {
+    if (completedPinsRef.current.has(pin)) return;
+    completedPinsRef.current.add(pin);
+    setChannelsLeft((n) => Math.max(0, n - 1));
+  }, []);
+
+  // Render kanal
+  const renderChannelItem = ({ item }) => {
+    const hasActions = Array.isArray(item.actions) && item.actions.length > 0;
+
+    return (
+      <>
+        <View style={styles.channelItemContainer}>
+          <View style={styles.channelHeader}>
+            <TouchableOpacity
+              onLongPress={() => handleRemovePinConfiguration(item.pin)}
+              onPress={() => {
+                if (expandedChannels.includes(item.pin)) {
+                  setExpandedChannels((prev) =>
+                    prev.filter((id) => id !== item.pin)
+                  );
+                } else {
+                  setExpandedChannels((prev) => [...prev, item.pin]);
+                }
+              }}
+            >
+              <Text style={styles.channelName}>{`Pin ${item.pin}`}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (expandedChannels.includes(item.pin)) {
+                  setExpandedChannels((prev) =>
+                    prev.filter((id) => id !== item.pin)
+                  );
+                } else {
+                  setExpandedChannels((prev) => [...prev, item.pin]);
+                }
+              }}
+            >
+              <AntDesign
+                name={expandedChannels.includes(item.pin) ? "up" : "down"}
+                size={20}
+                color="black"
+              />
+            </TouchableOpacity>
+          </View>
+
+          {expandedChannels.includes(item.pin) ? (
+            <View style={{ marginTop: 6 }}>
+              <FlatList
+                keyboardShouldPersistTaps="always"
+                data={item.actions}
+                renderItem={({ item: action }) => (
+                  <TaskRow
+                    task={action}
+                    id={action.id}
+                    handleUpdateTask={handleUpdateAction}
+                    handleDeleteTask={handleDeleteTask}
+                  />
+                )}
+                keyExtractor={(action) => action.id}
+              />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Button
+                  title="+ Action"
+                  onPress={() => handleAddAction(item.pin)}
+                />
+                <Button
+                  title="+ Delay"
+                  onPress={() => handleAddDelay(item.pin)}
+                />
+              </View>
+            </View>
+          ) : null}
         </View>
 
-        {expandedChannels.includes(item.pin) ? (
-          <View style={{ marginTop: 6 }}>
-            <FlatList
-              data={item.actions}
-              renderItem={({ item: action }) => (
-                <TaskRow
-                  task={action}
-                  id={action.id}
-                  handleUpdateTask={handleUpdateAction}
-                  handleDeleteTask={handleDeleteTask}
-                />
-              )}
-              keyExtractor={(item) => item.id}
-            />
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Button
-                title="+ Action"
-                onPress={() => handleAddAction(item.pin)}
-              />
-              <Button
-                title="+ Delay"
-                onPress={() => handleAddDelay(item.pin)}
-              />
-            </View>
-          </View>
-        ) : null}
-      </View>
-      <RoutineBar
-        tasks={item.actions}
-        // invertColors
-        start={isRunning}
-        onAnimationDone={() => setIsRunning(false)}
-      />
-    </>
-  );
+        <RoutineBar
+          tasks={item.actions}
+          start={isRunning && hasActions} // starta inte tomma kanaler
+          onAnimationDone={() => onChannelDone(item.pin)} // räkna ner, inte stäng allt
+        />
+      </>
+    );
+  };
 
   if (isLoading || !routine) return <Text>Loading...</Text>;
 
   const shootTimeSecDisplay = String(
-    Math.max(0, Math.round(((metadata?.shootTimeMs ?? longestDelay)) / 1000))
+    Math.max(0, Math.round((metadata?.shootTimeMs ?? longestDelay) / 1000))
   );
+
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={routine.pinConfigurations ?? []}
-        renderItem={renderChannelItem}
-        keyExtractor={(item) => item.pin.toString()}
-        contentContainerStyle={styles.list}
-        ListFooterComponent={
-          <View style={{ margin: 16 }}>
-            <Button title="Add pin" onPress={handleQuickAddPinConfiguration} />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
+    >
+      <View style={styles.container}>
+        <FlatList
+          keyboardShouldPersistTaps="always"
+          data={routine.pinConfigurations ?? []}
+          renderItem={renderChannelItem}
+          keyExtractor={(item) => item.pin.toString()}
+          contentContainerStyle={styles.list}
+          ListFooterComponent={
+            <View style={{ margin: 16 }}>
+              <Button
+                title="Add pin"
+                onPress={handleQuickAddPinConfiguration}
+              />
+            </View>
+          }
+        />
+
+        {(isRunning || isCalloutsActive) && (
+          <View style={styles.overlay}>
+            <ActivityIndicator size="large" color="white" />
+            <Text style={styles.overlayText}>{callout}</Text>
           </View>
-        }
-      />
-      {isRunning && (
-        <View style={styles.overlay}>
-          <ActivityIndicator size="large" color="white" />
-          <Text style={styles.overlayText}>{callout}</Text>
-        </View>
-      )}
-      <View style={styles.manualButtonRow}>
-        <TouchableOpacity
-          style={styles.manualButton}
-          onPress={() => {
-            playerLoad.seekTo(0);
-            playerLoad.play();
-          }}
-        >
-          <Text style={styles.manualButtonText}>Ladda</Text>
-        </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          style={styles.manualButton}
-          onPress={() => {
-            playerAllReady.seekTo(0);
-            playerAllReady.play();
-          }}
-        >
-          <Text style={styles.manualButtonText}>Alla klara?</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.togglePanel}>
-        <Text style={styles.togglePanelTitle}>Automatiska ljudutrop</Text>
-
-        <View style={styles.shootTimeRow}>
-          <Text style={styles.toggleLabel}>Skjuttid (sek)</Text>
-          <ThemedInput
-            // style={styles.shootTimeInput}
-            
-            keyboardType="numeric"
-            value={shootTimeSecDisplay}
-            onChangeText={(val) => {
-              const num = Number((val || "").replace(",", "."));
-              if (!Number.isFinite(num)) return;
-              const ms = Math.max(0, Math.round(num * 1000));
-              updateMetadata({
-                ...(metadata || {}),
-                playSounds: metadata?.playSounds ?? {
-                  ten_seconds: true,
-                  ready: true,
-                  fire: true,
-                  ceasefire: true,
-                },
-                shootTimeMs: ms,
-              });
+        <View className="manualButtonRow" style={styles.manualButtonRow}>
+          <TouchableOpacity
+            style={styles.manualButton}
+            onPress={() => {
+              playerLoad.seekTo(0);
+              playerLoad.play();
             }}
-          />
+          >
+            <Text style={styles.manualButtonText}>Ladda</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.manualButton}
+            onPress={() => {
+              playerAllReady.seekTo(0);
+              playerAllReady.play();
+            }}
+          >
+            <Text style={styles.manualButtonText}>Alla klara?</Text>
+          </TouchableOpacity>
         </View>
-        {Object.keys(soundLabels).map((key) => (
-          <View key={key} style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>{soundLabels[key]}</Text>
-            <Switch
-              value={metadata?.playSounds?.[key] ?? true}
-              onValueChange={() => handleToggleSound(key)}
+
+        <View style={styles.togglePanel}>
+          <Text style={styles.togglePanelTitle}>Automatiska ljudutrop</Text>
+
+          <View style={styles.shootTimeRow}>
+            <Text style={styles.toggleLabel}>Skjuttid (sek)</Text>
+            <ThemedInput
+              keyboardType="numeric"
+              value={shootTimeSecDisplay}
+              onChangeText={(val) => {
+                const num = Number((val || "").replace(",", "."));
+                if (!Number.isFinite(num)) return;
+                const ms = Math.max(0, Math.round(num * 1000));
+                updateMetadata({
+                  ...(metadata || {}),
+                  playSounds: metadata?.playSounds ?? {
+                    ten_seconds: true,
+                    ready: true,
+                    fire: true,
+                    ceasefire: true,
+                  },
+                  shootTimeMs: ms,
+                });
+              }}
             />
           </View>
-        ))}
+
+          {Object.keys(soundLabels).map((key) => (
+            <View key={key} style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>{soundLabels[key]}</Text>
+              <Switch
+                value={metadata?.playSounds?.[key] ?? true}
+                onValueChange={() => handleToggleSound(key)}
+              />
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.playButton,
+            isRunning && styles.playButtonRunning,
+            pendingUpdates && styles.saveButton,
+          ]}
+          disabled={isRunning}
+          onPress={pendingUpdates ? handleSaveUpdates : handleRun}
+        >
+          <AntDesign
+            name={pendingUpdates ? "save" : "playcircleo"}
+            size={48}
+            color="white"
+          />
+        </TouchableOpacity>
       </View>
-      <TouchableOpacity
-        style={[
-          styles.playButton,
-          isRunning && styles.playButtonRunning,
-          pendingUpdates && styles.saveButton,
-        ]}
-        disabled={isRunning}
-        onPress={pendingUpdates ? handleSaveUpdates : handleRun} // Choose the appropriate function
-      >
-        <AntDesign
-          name={pendingUpdates ? "save" : "playcircleo"}
-          size={48}
-          color="white"
-        />
-      </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -696,6 +730,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     backgroundColor: "#fafafa",
     fontSize: 16,
+  },
+  saveButton: {
+    backgroundColor: "#007A5A",
   },
 });
 
