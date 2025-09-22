@@ -25,17 +25,22 @@ export default function App() {
   }
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-    <RecoilRoot>
-      <NavigationContainer>
-        <PromptProvider>
-        <WifiBindingProvider targetSsid="D1Mini_AP" autoBind={false}autoConnect={false}>
-          <ShooterAPIProvider>
-            <AppNavigation />
-          </ShooterAPIProvider>
-          </WifiBindingProvider>
-        </PromptProvider>
-      </NavigationContainer>
-    </RecoilRoot>
+      <RecoilRoot>
+        <NavigationContainer>
+          <PromptProvider>
+            <WifiBindingProvider
+              targetSsid="D1Mini_AP"
+              autoBindOnForeground={true}
+              showBanner={true}
+              bannerSafeArea={true}
+            >
+              <ShooterAPIProvider>
+                <AppNavigation />
+              </ShooterAPIProvider>
+            </WifiBindingProvider>
+          </PromptProvider>
+        </NavigationContainer>
+      </RecoilRoot>
     </ThemeProvider>
   );
 }
