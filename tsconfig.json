@@ -8,9 +8,5 @@
       ]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "app.config.js"
-  ]
+  "include": ["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "app.config.js"]
 }

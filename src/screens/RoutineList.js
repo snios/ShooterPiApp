@@ -1,38 +1,46 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  Alert
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons"; // Make sure to install the vector-icons package
 import { useShooterApiContext } from "../contexts/ShooterAPIContext";
 import * as Crypto from "expo-crypto";
 import usePrompt from "../hooks/usePrompt";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 
-const RoutineListScreen = ({ navigation }) => {
+const RoutineListScreen = () => {
   const [routines, setRoutines] = useState([]);
   const { routinesApi, pinsApi, programApi } = useShooterApiContext();
+  const navigation = useNavigation();
 
   const prompt = usePrompt();
 
-  useEffect(() => {
-    if (programApi) fetchRoutines();
-  }, []);
-
-  const fetchRoutines = async () => {
+  const fetchRoutines = useCallback(async () => {
+    if (!programApi) return;
     try {
       const response = await programApi.get();
-      console.log("got all routines", response.data);
-
+      // console.log("got all routines", response.data);
       setRoutines(response.data);
     } catch (error) {
-      alert(JSON.stringify(error));
       console.error("Error fetching routines:", error);
+      Alert.alert("Fel", "Kunde inte hämta rutiner.");
     }
-  };
+  }, [programApi]);
+
+  // Kör varje gång skärmen får fokus (även när man navigerar tillbaka)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('fetching routines?? focus triggeR??');
+      fetchRoutines();
+      // valfritt: avbryt/cleanup om du vill annullera pågående hämtning
+      return () => {};
+    }, [fetchRoutines])
+  );
 
   const handleDeleteProgram = async (id) => {
     Alert.alert("Delete", "Delete this program?", [
@@ -65,9 +73,8 @@ const RoutineListScreen = ({ navigation }) => {
   };
 
   const quickCreateNewRoutine = async () => {
-
-    // navigation.navigate("NewRoutineWizard");
-    // return;
+    navigation.navigate("NewRoutineWizard");
+    return;
     const userInput = await prompt();
     if (userInput !== null) {
       console.log("User input:", userInput);

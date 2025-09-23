@@ -1,10 +1,17 @@
 import { useMemo, useState, useRef, useEffect } from "react";
-import { SafeAreaView, StyleSheet, View, Pressable } from "react-native";
+import { SafeAreaView, StyleSheet, View, Pressable, Alert } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedInput } from "@/components/ThemedInput";
 import { ThemedSwitch } from "@/components/ThemedSwitch";
 import { buildFirmwarePayload } from "@/libs/firmwareHelpers"; // ⬅️ se till att denna fil finns
+import {useShooterApiContext} from "@/contexts/ShooterAPIContext";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "@/navigation/AppNavigation";
+
+
+type Nav = NativeStackNavigationProp<RootStackParamList, "NewRoutineWizard">;
 
 // --- Lokala UI-typer ---
 type Segment = { start: number; end: number; on: boolean };
@@ -37,6 +44,8 @@ const segmentsCoverTotal = (total: number, segs: Segment[]) => {
 };
 
 export default function NewRoutineWizardScreen() {
+  const navigation = useNavigation<Nav>();
+    const { programApi } = useShooterApiContext();
   const [enabled1, setEnabled1] = useState(false);
   const [enabled2, setEnabled2] = useState(false);
   const [enabled3, setEnabled3] = useState(false);
@@ -290,6 +299,19 @@ export default function NewRoutineWizardScreen() {
     const payload = buildFirmwarePayload(finalDraft);
     console.log("Spara:", JSON.stringify(payload));
 
+    programApi
+      .createOrUpdate(payload)
+      .then((res) => {
+        console.log("save res", res);
+        Alert.alert("Rutin sparad", undefined, 
+          [
+            {
+              text: 'Ok',
+              onPress: () => navigation.navigate("RoutineList")
+            }
+          ])
+      })
+      .catch((err) => console.warn("Error saving program", err));
     // Exempel-POST (avkommentera när du vill testa mot ESP:n)
     // fetch("http://192.168.4.1/save", {
     //   method: "POST",

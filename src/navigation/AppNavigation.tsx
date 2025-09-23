@@ -8,8 +8,19 @@ import ViewRoutineScreen from '../screens/ViewRoutine';
 import EditRoutineScreen from '../screens/EditRoutineScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
-const Stack = createNativeStackNavigator();
 
+
+export type RootStackParamList = {
+  Home: undefined;
+  RoutineList: undefined;
+  CreateRoutine: undefined;
+  NewRoutineWizard: undefined;
+  ViewRoutine: { id: number | string };
+  EditRoutine: undefined;
+  Settings: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const AppNavigation = () => {
   return (
     <Stack.Navigator>
